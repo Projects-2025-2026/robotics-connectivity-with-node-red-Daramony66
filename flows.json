@@ -1,0 +1,159 @@
+[
+    {
+        "id": "434f08d90ac27b16",
+        "type": "tab",
+        "label": "Flux 7",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "6fb4c7856cbda723",
+        "type": "debug",
+        "z": "434f08d90ac27b16",
+        "name": "debug 3",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 840,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "be31d4ae95380e44",
+        "type": "http in",
+        "z": "434f08d90ac27b16",
+        "name": "",
+        "url": "/commande",
+        "method": "post",
+        "upload": false,
+        "skipBodyParsing": false,
+        "swaggerDoc": "",
+        "x": 330,
+        "y": 240,
+        "wires": [
+            [
+                "59c01234e1b81c57"
+            ]
+        ]
+    },
+    {
+        "id": "4f2a10afc4aa48b9",
+        "type": "http request",
+        "z": "434f08d90ac27b16",
+        "name": "",
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://127.0.0.1:5000/commande",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 670,
+        "y": 280,
+        "wires": [
+            [
+                "9ab36bfa5ea2a57f",
+                "6fb4c7856cbda723"
+            ]
+        ]
+    },
+    {
+        "id": "9ab36bfa5ea2a57f",
+        "type": "http response",
+        "z": "434f08d90ac27b16",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 850,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "ba74864cfb6f0b0d",
+        "type": "inject",
+        "z": "434f08d90ac27b16",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "J1:90",
+        "payloadType": "str",
+        "x": 310,
+        "y": 300,
+        "wires": [
+            [
+                "59c01234e1b81c57"
+            ]
+        ]
+    },
+    {
+        "id": "9e7dc42ef1e6193e",
+        "type": "inject",
+        "z": "434f08d90ac27b16",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "exit",
+        "payloadType": "str",
+        "x": 310,
+        "y": 340,
+        "wires": [
+            [
+                "59c01234e1b81c57"
+            ]
+        ]
+    },
+    {
+        "id": "59c01234e1b81c57",
+        "type": "function",
+        "z": "434f08d90ac27b16",
+        "name": "function 1",
+        "func": "msg.method = \"POST\";\nmsg.url = \"http://127.0.0.1:5000/commande\";  // Python écoute ici\nmsg.headers = { \"Content-Type\": \"text/plain\" };\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 520,
+        "y": 280,
+        "wires": [
+            [
+                "4f2a10afc4aa48b9"
+            ]
+        ]
+    }
+]

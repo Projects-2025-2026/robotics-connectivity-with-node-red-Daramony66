@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Contrôle robot 6 Axes</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      width: 450px;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 15px;
+    }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    label {
+      font-weight: bold;
+    }
+    select, input[type="number"], button {
+      padding: 8px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+    button {
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    button:hover {
+      background-color: #ddd;
+    }
+    .actions {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 15px; /* un peu plus d'espace sous les boutons */
+    }
+    .frame {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 15px;
+      background-color: #fafafa;
+    }
+    .frame h2 {
+      font-size: 18px;
+      margin-top: 0;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 5px;
+      color: #555;
+    }
+    .output {
+      font-family: "Courier New", Courier, monospace;
+      font-weight: bold;
+      color: #333;
+      padding: 5px;
+      min-height: 30px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Contrôle du robot</h1>
+
+    <div class="controls">
+      <!-- Boutons remontés ici -->
+      <div class="actions">
+        <button id="home">Home</button>
+        <button id="quit">Quitter</button>
+      </div>
+
+      <label for="joint">Sélectionner un joint :</label>
+      <select id="joint">
+        <option value="1">J1</option>
+        <option value="2">J2</option>
+        <option value="3">J3</option>
+        <option value="4">J4</option>
+        <option value="5">J5</option>
+        <option value="6">J6</option>
+      </select>
+
+      <label for="angle">Déplacement (en degrés) :</label>
+      <input type="number" id="angle" placeholder="ex : 15" />
+
+      <button id="send">Envoyer</button>
+    </div>
+
+    <div class="frame">
+      <h2>Réponse du robot</h2>
+      <div class="output" id="response">Aucune commande envoyée.</div>
+    </div>
+
+    <div class="frame">
+      <h2>Position articulaire du robot</h2>
+      <div class="output" id="posLine1">J1: - | J2: - | J3: -</div>
+      <div class="output" id="posLine2">J4: - | J5: - | J6: -</div>
+    </div>
+  </div>
+
+  <script>
+    const responseBox = document.getElementById('response');
+    const posLine1 = document.getElementById('posLine1');
+    const posLine2 = document.getElementById('posLine2');
+
+    // Fonction pour mettre à jour les positions affichées
+    function updatePositions(positions) {
+      if (!positions) {
+        posLine1.textContent = "J1: - | J2: - | J3: -";
+        posLine2.textContent = "J4: - | J5: - | J6: -";
+        return;
+      }
+      const keys = Object.keys(positions).sort((a,b) => {
+        return parseInt(a.slice(1)) - parseInt(b.slice(1));
+      });
+      const line1 = keys.slice(0,3).map(k => `${k}: ${positions[k]}`).join(" | ");
+      const line2 = keys.slice(3,6).map(k => `${k}: ${positions[k]}`).join(" | ");
+
+      posLine1.textContent = line1 || "J1: - | J2: - | J3: -";
+      posLine2.textContent = line2 || "J4: - | J5: - | J6: -";
+    }
+
+    // Au départ on initialise vide
+    updatePositions(null);
+
+    function envoyerCommande(commande) {
+      responseBox.textContent = "Envoi de la commande : " + commande;
+
+      fetch('http://127.0.0.1:1880/commande', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: commande
+      })
+      .then(res => res.json())
+      .then(data => {
+        // data = { reponse: "...", positions: {J1:"...", J2:"...", ...} }
+        responseBox.textContent = data.reponse || "Pas de réponse.";
+        updatePositions(data.positions);
+      })
+      .catch(err => {
+        responseBox.textContent = "Erreur : " + err.message;
+      });
+    }
+
+    document.getElementById('send').addEventListener('click', () => {
+      const joint = document.getElementById('joint').value;
+      const angle = document.getElementById('angle').value;
+
+      if (angle === "" || isNaN(angle)) {
+        alert("Veuillez entrer un angle valide.");
+        return;
+      }
+
+      const commande = `J${joint}:${angle}`;
+      envoyerCommande(commande);
+    });
+
+    document.getElementById('home').addEventListener('click', () => {
+      envoyerCommande("HOME");
+    });
+
+    document.getElementById('quit').addEventListener('click', () => {
+      if (confirm("Voulez-vous vraiment déconnecter le robot ?")) {
+        envoyerCommande("exit"); // ou "DISCONNECT" selon ton serveur
+      }
+    });
+  </script>
+</body>
+</html>
