@@ -1,0 +1,219 @@
+PROGRAM VFinale_move_joints 
+%COMMENT = 'Vraie VFinale'
+%NOLOCKGROUP
+%NOPAUSE = ERROR+COMMAND+TPENABLE
+%INCLUDE klevtpe
+%INCLUDE klevccdf
+---------------------------------------------------------------------------
+VAR
+    file_var     : FILE
+    status       : INTEGER
+    entry        : INTEGER
+    msg          : STRING[128]
+    reponse      : STRING[128]
+    
+    joint_num    : INTEGER
+    joint_numStr : STRING[6]
+    angle_deg    : REAL
+    angle_len    : INTEGER
+    i            : INTEGER
+
+    jnt          : JOINTPOS
+    rel          : ARRAY[6] OF REAL
+    relStr       : ARRAY[6] OF STRING[20]
+    
+    etat         : BOOLEAN
+    sym          : BOOLEAN
+    min_limit    : REAL
+    max_limit    : REAL
+---------------------------------------------------------------------------
+BEGIN
+    WRITE(CR, '--- Serveur TCP Move Joints ---', CR)
+    
+    SET_FILE_ATR(file_var, ATR_IA)
+    SET_VAR(entry, '*SYSTEM*', '$HOSTS_CFG[3].$SERVER_PORT', 59002, status)
+    WRITE('Connecting..', CR)
+    
+    MSG_CONNECT('S3:', status)
+    IF status <> 0 THEN
+        WRITE('Erreur de connexion : ', status, CR)
+        ABORT
+    ELSE
+        WRITE('Opening connection...', CR)
+    ENDIF
+    
+    OPEN FILE file_var('rw', 'S3:')
+    status = IO_STATUS(file_var)
+    IF status <> 0 THEN
+        WRITE('Erreur ouverture socket : ', status, CR)
+        ABORT
+    ELSE
+	 WRITE('Connexion  tablie sur port 59002', CR)
+	 WRITE('En attente de commande...', CR)
+    ENDIF
+    
+    etat = TRUE
+    
+    WHILE etat DO
+        BYTES_AHEAD(file_var, entry, status)
+        IF entry > 0 THEN
+            READ file_var(msg::entry)
+
+            -- COMMANDE EXIT
+            IF msg = 'exit' THEN
+                WRITE file_var('EXIT OK')
+                WRITE('Déconnexion demandée.', CR)
+                etat = FALSE
+
+            ELSE
+                IF msg = 'HOME' THEN
+                    
+                    jnt = CURJPOS(0,0)
+                    WRITE('Position actuelle:', CR, jnt, CR)
+                    CNV_JPOS_REL(jnt, rel, status) 
+                    rel[1] = 0
+                    rel[2] = 0
+                    rel[3] = 0
+                    rel[4] = 0
+                    rel[5] = -90
+                    rel[6] = 0                    
+                    CNV_REL_JPOS(rel, jnt, status)
+                    
+                    -- Enregistrer la position dans PR1 
+                    SET_JPOS_REG(1, jnt, status)
+                    jnt = GET_JPOS_REG(1, status) -- exemple pour récupérer un PR (pas utile dans ce code)
+                    
+                    -- DEPLACEMENT DU ROBOT
+                    WRITE('Déplacement...', CR)  
+                    MOVE TO jnt
+                    WRITE('Mouvement terminé.', CR)               
+                    WRITE('Nouvelle position:', CR, jnt, CR)
+                    
+                    --REPONSE ENVOYEE
+                    reponse = 'POSITION HOME ATTEINTE;'
+                    FOR i = 1 TO 6 DO
+                        CNV_REAL_STR(rel[i], 6, 3, relStr[i])   -- convertit les angles en chaînes de caractère
+                        CNV_INT_STR(i, 1, 16, joint_numStr)     -- convertit l'itération en string pour le n joint
+                        joint_numStr = SUB_STR(joint_numStr, 2, 1) -- enlève un espace en trop
+                        reponse = reponse + 'J' + joint_numStr + ':' + relStr[i] + ';' -- construction de la réponse du robot
+                    ENDFOR	                  	
+                    WRITE file_var(reponse) -- envoi le réponse construite
+                       
+                ELSE
+                    -- Exemple de message : "J1:90"
+                    angle_len = STR_LEN(msg) - 3 -- exemple pour J1:90, enlève 'J1:' et garde 90
+                    
+                    -- R cup re le num ro du joint
+                    CNV_STR_INT(SUB_STR(msg, 2, 1), joint_num) -- prends un caratère à partir du 2 ème caractère du msg
+                    
+                    -- Récupère l'angle en degrés (type réelle)
+                    CNV_STR_REAL(SUB_STR(msg, 4, angle_len), angle_deg)
+                    
+                    WRITE('Commande reçue : Joint ', joint_num, ' -> ', SUB_STR(msg, 4, angle_len), ' degrés', CR) --affichage sur Teach
+                    
+                    -- Lecture joints actuels
+                    jnt = CURJPOS(0,0)
+                    CNV_JPOS_REL(jnt, rel, status)
+                    WRITE('Position actuelle:', CR, jnt, CR)
+
+                    rel[joint_num] = rel[joint_num] + angle_deg
+                        
+                    -- Définir les limites selon le joint (optionnel)
+                    SELECT joint_num OF
+                        CASE(1):
+                            min_limit = -185.0
+                            max_limit = 185.0
+                            sym = TRUE
+                        CASE(2):
+                            min_limit = -60.0
+                            max_limit = 76.0
+                            sym = FALSE
+                        CASE(3):
+                            min_limit = -79.0
+                            max_limit = 180.0
+                            sym = FALSE
+                        CASE(4):
+                            min_limit = -360.0
+                            max_limit = 360.0
+                            sym = TRUE
+                        CASE(5):
+                            min_limit = -125.0
+                            max_limit = 125.0
+                            sym = FALSE
+                        CASE(6):
+                            min_limit = -360.0
+                            max_limit = 360.0
+                            sym = TRUE
+                    ENDSELECT
+                            
+                    -- Gestion selon symétrie
+                    IF sym THEN
+                        WHILE rel[joint_num] > max_limit DO
+                            rel[joint_num] = rel[joint_num] - 360.0
+                        ENDWHILE
+                        WHILE rel[joint_num] < min_limit DO
+                            rel[joint_num] = rel[joint_num] + 360.0
+                        ENDWHILE
+                            
+                        CNV_REL_JPOS(rel, jnt, status) -- remet la position en JOINTPOS pour pouvoir le déplacer
+                        
+                        -- DEPLACEMENT du robot
+                        WRITE('Déplacement...', CR)                                
+                        MOVE TO jnt
+                        WRITE('Mouvement terminé.', CR)
+                        WRITE('Nouvelle position:', CR, jnt, CR)
+                        
+                        -- construire la r ponse du robot
+                        reponse = 'POSITION ATTEINTE;'
+                        FOR i = 1 TO 6 DO
+                            CNV_REAL_STR(rel[i], 6, 3, relStr[i])
+                            CNV_INT_STR(i, 1, 16, joint_numStr)
+                            joint_numStr = SUB_STR(joint_numStr, 2, 1)
+                            reponse = reponse + 'J' + joint_numStr + ':' + relStr[i] + ';'
+                        ENDFOR
+                        WRITE file_var(reponse)
+                           
+                    ELSE
+                        IF (rel[joint_num] > max_limit) OR (rel[joint_num] < min_limit) THEN
+                            WRITE('Commande hors limites pour J', joint_num, ': ', CR)
+                            CNV_JPOS_REL(jnt, rel, status)
+                            reponse = 'COMMANDE HORS LIMITES;'
+                            FOR i = 1 TO 6 DO
+                                CNV_REAL_STR(rel[i], 6, 3, relStr[i])
+                                CNV_INT_STR(i, 1, 16, joint_numStr)
+                                joint_numStr = SUB_STR(joint_numStr, 2, 1)
+                                reponse = reponse + 'J' + joint_numStr + ':' + relStr[i] + ';'
+                            ENDFOR
+                            WRITE file_var(reponse)
+                            WRITE('En attente de commande...', CR)
+                        ELSE
+                            CNV_REL_JPOS(rel, jnt, status)
+                            
+                            -- DEPLACEMENT du robot
+                            WRITE('Déplacement...', CR)                                   
+                            MOVE TO jnt     
+                            WRITE('Mouvement terminé.', CR)
+                            WRITE('Nouvelle position:', CR, jnt, CR)
+                                
+                            reponse = 'POSITION ATTEINTE;'
+                            FOR i = 1 TO 6 DO
+                                CNV_REAL_STR(rel[i], 6, 3, relStr[i])
+                                CNV_INT_STR(i, 1, 16, joint_numStr)
+                                joint_numStr = SUB_STR(joint_numStr, 2, 1)
+                                reponse = reponse + 'J' + joint_numStr + ':' + relStr[i] + ';'
+                            ENDFOR
+                            WRITE file_var(reponse)
+                        ENDIF
+                    ENDIF
+                ENDIF               
+            ENDIF
+        ELSE
+            DELAY 250
+        ENDIF
+    ENDWHILE
+    
+    CLOSE FILE file_var
+    MSG_DISCO('S3:', status)
+    WRITE('Serveur arrêté.', CR)
+
+END VFinale_move_joints
